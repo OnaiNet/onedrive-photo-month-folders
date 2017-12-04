@@ -7,11 +7,11 @@
 if (isset($_SERVER['OneDrive']))
 	$photos_path = $_SERVER['OneDrive'] . DIRECTORY_SEPARATOR . 'Pictures' . DIRECTORY_SEPARATOR;
 else
-	// Assume Linux with ~/OneDrive SymLinked to OneDrive folder
-	$photos_path = $_SERVER['HOME'] . '/OneDrive/Pictures/';
+	// Assume Linux with /OneDrive SymLinked to user's OneDrive folder
+	// sudo ln -s "/mnt/c/Users/username/OneDrive" /OneDrive
+	$photos_path = '/OneDrive/Pictures/';
 
 $scan_path = $photos_path . 'Camera Roll' . DIRECTORY_SEPARATOR;
-//$scan_path = $photos_path;// . 'Camera Roll' . DIRECTORY_SEPARATOR;
 $target_path = $photos_path;
 $extensions = 'jpe?g|mkv|mp4|mpe?g|mov|png|avi';
 date_default_timezone_set('America/Denver');
