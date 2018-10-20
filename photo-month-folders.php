@@ -4,16 +4,18 @@
  * @author Kevin Gwynn <kevin.gwynn@gmail.com>
  */
 
-if (isset($_SERVER['OneDrive']))
+// This works better on Windows
+if (isset($_SERVER['OneDrive'])) {
 	$photos_path = $_SERVER['OneDrive'] . DIRECTORY_SEPARATOR . 'Pictures' . DIRECTORY_SEPARATOR;
-else
+} else {
 	// Assume Linux with /OneDrive SymLinked to user's OneDrive folder
 	// sudo ln -s "/mnt/c/Users/username/OneDrive" /OneDrive
 	$photos_path = '/OneDrive/Pictures/';
+}
 
 $scan_path = $photos_path . 'Camera Roll' . DIRECTORY_SEPARATOR;
 $target_path = $photos_path;
-$extensions = 'jpe?g|mkv|mp4|mpe?g|mov|png|avi';
+$extensions = 'jpe?g|mkv|mp4|mpe?g|mov|png|avi|gif';
 date_default_timezone_set('America/Denver');
 
 echo timestamp() . "-Scanning [$scan_path]...\n";
