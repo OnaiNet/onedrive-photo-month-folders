@@ -36,10 +36,18 @@ while (true) {
 		if (is_dir($file)) continue; // Ignore any directories including '.' and '..'
 		$matches = [];
 		$year = $month = $day = $hour = $minute = $second = null;
+		
+		// Snapchat
+		if (preg_match("/^Snapchat-/", $file)) {
+			debug("Processing Snapchat file by created date: $file");
 
+			$created_date = get_created_date($scan_path . DIRECTORY_SEPARATOR . $file);
+			$year = $created_date['year'];
+			$month = $created_date['month'];
+		}
 		// FIXED: Ex: 201801231058201000.jpg tries to create the path: 2023/2023-18
 		// Mostly a catch-all expression...
-		if (preg_match("/(20[012][0-9])[\. _\-]?(0[1-9]|1[0-2])[\. _\-]?([0-2][0-9]|3[01])[\. _\-]?([01][0-9]|2[0-3])[\. _\-]?([0-5][0-9])[\. _\-]?([0-5][0-9]).*?\.($extensions)$/", $file, $matches)) {
+		elseif (preg_match("/(20[012][0-9])[\. _\-]?(0[1-9]|1[0-2])[\. _\-]?([0-2][0-9]|3[01])[\. _\-]?([01][0-9]|2[0-3])[\. _\-]?([0-5][0-9])[\. _\-]?([0-5][0-9]).*?\.($extensions)$/", $file, $matches)) {
 			debug("Matched main expression:", $matches);
 
 			$year = $matches[1];
@@ -59,14 +67,6 @@ while (true) {
 			$hour = $matches[4];
 			$minute = $matches[5];
 			$second = '00'; // not in file path
-		}
-		// Snapchat
-		elseif (preg_match("/^Snapchat-/", $file)) {
-			debug("Processing Snapchat file by created date: $file");
-
-			$created_date = get_created_date($scan_path . DIRECTORY_SEPARATOR . $file);
-			$year = $created_date['year'];
-			$month = $created_date['month'];
 		}
 		// Did not match
 		else {
@@ -90,6 +90,8 @@ while (true) {
 		echo ($i / SLEEP_INTERVAL_COUNT > 0.95) ? '!' : '.';
 		sleep(SLEEP_INTERVAL);
 	}
+	
+	echo "\n";
 }
 
 function debug($msg, $data = null) {
