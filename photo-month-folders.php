@@ -4,6 +4,12 @@
  * @author Kevin Gwynn <kevin.gwynn@gmail.com>
  */
 
+ // Configuration
+const DEBUG = false;
+const SLEEP_LENGTH = 60 * 15; // 15 minutes
+const SLEEP_INTERVAL_COUNT = 60;
+const SLEEP_INTERVAL = SLEEP_LENGTH / SLEEP_INTERVAL_COUNT; // divide into 60 individual sleeps
+
 // This works better on Windows
 if (isset($_SERVER['OneDrive'])) {
 	$photos_path = $_SERVER['OneDrive'] . DIRECTORY_SEPARATOR . 'Pictures' . DIRECTORY_SEPARATOR;
@@ -22,9 +28,8 @@ $target_path = $photos_path;
 $extensions = 'jpe?g|mkv|mp4|mpe?g|mov|png|avi|gif';
 date_default_timezone_set('America/Denver');
 
-echo timestamp() . "-Scanning [$scan_path]...\n";
-
 while (true) {
+	output("Scanning [$scan_path]...");
 	$dp = opendir($scan_path);
 
 	while ($file = readdir($dp)) {
@@ -35,28 +40,37 @@ while (true) {
 		// FIXED: Ex: 201801231058201000.jpg tries to create the path: 2023/2023-18
 		// Mostly a catch-all expression...
 		if (preg_match("/(20[012][0-9])[\. _\-]?(0[1-9]|1[0-2])[\. _\-]?([0-2][0-9]|3[01])[\. _\-]?([01][0-9]|2[0-3])[\. _\-]?([0-5][0-9])[\. _\-]?([0-5][0-9]).*?\.($extensions)$/", $file, $matches)) {
+			debug("Matched main expression:", $matches);
+
 			$year = $matches[1];
 			$month = $matches[2];
 			$day = $matches[3];
 			$hour = $matches[4];
 			$minute = $matches[5];
 			$second = $matches[6];
-
-//echo "Matched main expression:\n"; print_r($matches);
 		}
 		// For LG G6's stupid format, eg: 0626171644.jpg (EWWW)
 		elseif (preg_match("/(0[0-9]|1[0-2])([0-2][0-9]|3[01])([12][0-9])(\d{2})(\d{2}).*?\.($extensions)$/", $file, $matches)) {
+			debug("Matched LG expression:", $matches);
+
 			$month = $matches[1];
 			$day = $matches[2];
 			$year = '20' . $matches[3];
 			$hour = $matches[4];
 			$minute = $matches[5];
 			$second = '00'; // not in file path
-//echo "Matched LG expression:\n"; print_r($matches);
+		}
+		// Snapchat
+		elseif (preg_match("/^Snapchat-/", $file)) {
+			debug("Processing Snapchat file by created date: $file");
+
+			$created_date = get_created_date($scan_path . DIRECTORY_SEPARATOR . $file);
+			$year = $created_date['year'];
+			$month = $created_date['month'];
 		}
 		// Did not match
 		else {
-			echo timestamp() . "-Could not parse: $file\n";
+			output("Could not parse: $file");
 		}
 
 		if ($year != null) {
@@ -64,13 +78,40 @@ while (true) {
 			$move_to = $target_path . $year . DIRECTORY_SEPARATOR . $year . '-' . $month . DIRECTORY_SEPARATOR;
 
 			if (move_file($move_from, $move_to . $file)) {
-				echo timestamp() . "-$file => $move_to\n";
+				output("$file => $move_to");
 			}
 		}
 	}
 
+	// Go to sleep until next cycle
+	output("Sleeping for " . SLEEP_LENGTH . " second(s)");
+
+	for ($i = 0; $i < SLEEP_INTERVAL_COUNT; $i++) {
+		echo ($i / SLEEP_INTERVAL_COUNT > 0.95) ? '!' : '.';
+		sleep(SLEEP_INTERVAL);
+	}
+}
+
+function debug($msg, $data = null) {
+	if (!DEBUG) return;
 	
-	sleep(60 * 15);
+	output($msg);
+
+	if ($data) {
+		print_r($data);
+	}
+}
+
+function output($msg) {
+	echo timestamp() . ' ' . $msg . "\n";
+}
+
+function get_created_date($file) {
+	$timestamp = filemtime($file); // filemtime() is more reliable than filectime()
+	$data = array();
+	$data['year'] = date('Y', $timestamp);
+	$data['month'] = date('m', $timestamp);
+	return $data;
 }
 
 function timestamp() {
@@ -79,11 +120,11 @@ function timestamp() {
 
 function assert_directory_exists($path) {
 	if (!is_dir($path)) {
-		echo timestamp() . "-Path does not exist: [$path]\n";
+		output("Path does not exist: [$path]");
 
 		// Create folder only if it is applicable to the current month
 		if (basename($path) == date('Y-m')) {
-			echo timestamp() . "-Creating folder [$path]...\n";
+			output("Creating folder [$path]...");
 			mkdir($path, 0777, true);
 		}
 
@@ -97,18 +138,18 @@ function move_file($from, $to) {
 	$to_folder = dirname($to);
 
 	if (!assert_directory_exists($to_folder)) {
-		echo timestamp() . "-Cannot move [" . basename($from) . "]\n";
+		output("Cannot move [" . basename($from) . "]");
 		return false;
 	}
 
 	if (file_exists($to)) {
-		echo timestamp() . "-File exists! [$to]\n";
+		output("File exists! [$to])");
 
 		$from_bytes = filesize($from);
 		$to_bytes = filesize($to);
 		
 		if ($from_bytes != $to_bytes) {
-			echo timestamp() . "-Files differ: ($from_bytes bytes) vs. ($to_bytes bytes)\n";
+			output("Files differ: ($from_bytes bytes) vs. ($to_bytes bytes)");
 			return false;
 		}
 
@@ -116,14 +157,14 @@ function move_file($from, $to) {
 		$to_sha1 = sha1_file($to);
 			
 		if ($from_sha1 != $to_sha1) {
-			echo timestamp() . "-Files differ: ($from_sha1 SHA1) vs. ($to_sha1 SHA1)\n";
+			output("Files differ: ($from_sha1 SHA1) vs. ($to_sha1 SHA1)");
 			return false;
 		}
 
-		echo timestamp() . "-Files are identical.\n";
+		output("Files are identical.");
 	}
 
-	return rename($from, $to);
+	return DEBUG ? true : rename($from, $to);
 }
 
 ?>
