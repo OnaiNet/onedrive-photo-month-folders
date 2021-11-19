@@ -5,14 +5,18 @@
  */
 
  // Configuration
-const DEBUG = false;
+ // Now, to debug, set DEBUG=1 in env
+ $_SERVER['DEBUG'] = $_SERVER['DEBUG'] ?? false;
 const SLEEP_LENGTH = 60 * 15; // 15 minutes
 const SLEEP_INTERVAL_COUNT = 60;
 const SLEEP_INTERVAL = SLEEP_LENGTH / SLEEP_INTERVAL_COUNT; // divide into 60 individual sleeps
+set_error_handler('error_handler');
 
 // This works better on Windows
 if (isset($_SERVER['OneDrive'])) {
 	$photos_path = $_SERVER['OneDrive'] . DIRECTORY_SEPARATOR . 'Pictures' . DIRECTORY_SEPARATOR;
+} elseif (isset($_SERVER['ONEDRIVE'])) {
+	$photos_path = $_SERVER['ONEDRIVE'] . DIRECTORY_SEPARATOR . 'Pictures' . DIRECTORY_SEPARATOR;
 } else {
 	// Assume Linux with /OneDrive SymLinked to user's OneDrive folder
 	// sudo ln -s "/mnt/c/Users/username/OneDrive" /OneDrive
@@ -68,9 +72,16 @@ while (true) {
 			$minute = $matches[5];
 			$second = '00'; // not in file path
 		}
-		// Did not match
+		// Did not match by filename
 		else {
-			output("Could not parse: $file");
+			$created_date = get_created_date($scan_path . DIRECTORY_SEPARATOR . $file);
+
+			if ($created_date['year'] && $created_date['month']) {
+				$year = $created_date['year'];
+				$month = $created_date['month'];
+			} else {
+				output("Could not calculate target date for: $file");
+			}
 		}
 
 		if ($year != null) {
@@ -94,10 +105,43 @@ while (true) {
 	echo "\n";
 }
 
+function error_handler($error_level, $error_message, $error_file, $error_line) {
+	$error_level_name = get_error_level_name($error_level);
+
+	if ($error_level & (E_ERROR | E_WARNING | E_CORE_ERROR | E_CORE_WARNING)) {
+		
+		throw new Exception("$error_level_name: $error_message at $error_file:$error_line");
+	}
+
+	debug("$error_level_name: $error_message at $error_file:$error_line");
+}
+
+function get_error_level_name($error_level) {
+	static $LEVEL_NAMES_BY_LEVEL = array(
+		E_ERROR => "E_ERROR",
+		E_WARNING => "E_WARNING",
+		E_PARSE => "E_PARSE",
+		E_NOTICE => "E_NOTICE",
+		E_CORE_ERROR => "E_CORE_ERROR",
+		E_CORE_WARNING => "E_CORE_WARNING",
+		E_COMPILE_ERROR => "E_COMPILE_ERROR",
+		E_COMPILE_WARNING => "E_COMPILE_WARNING",
+		E_USER_ERROR => "E_USER_ERROR",
+		E_USER_WARNING => "E_USER_WARNING",
+		E_USER_NOTICE => "E_USER_NOTICE",
+		E_STRICT => "E_STRICT",
+		E_RECOVERABLE_ERROR => "E_RECOVERABLE_ERROR",
+		E_DEPRECATED => "E_DEPRECATED",
+		E_USER_DEPRECATED => "E_USER_DEPRECATED"
+	);
+
+	return $LEVEL_NAMES_BY_LEVEL[$error_level];
+}
+
 function debug($msg, $data = null) {
-	if (!DEBUG) return;
+	if (!$_SERVER['DEBUG']) return;
 	
-	output($msg);
+	output("DEBUG: " . $msg);
 
 	if ($data) {
 		print_r($data);
@@ -109,7 +153,53 @@ function output($msg) {
 }
 
 function get_created_date($file) {
-	$timestamp = filemtime($file); // filemtime() is more reliable than filectime()
+	$timestamp = false;
+	// NOTE: exif only works on images; not videos.
+	// NOTE: Here's an interesting library for getting metadata: https://code.google.com/archive/p/php-reader/source/default/source
+	// NOTE: Another option is 'mediainfo' CLI script for Debian/apt: e.g. mediainfo MOVIE\(1\).m4v --output=JSON
+	
+	// EXIF / Images
+	try {
+		$exif = exif_read_data($file);
+		// KAG: TODO: Handle EXIF data
+		throw new Exception("EXIF Data available on file, but not yet supported (TODO)");
+
+	} catch (Exception $ex) {
+		debug("EXIF not available: " . $ex->getMessage());
+		// EXIF not supported
+	}
+
+	if (!$timestamp) {
+		// mediainfo command
+		try {
+			$file_argument = escapeshellarg($file);
+
+			$json_output = shell_exec("mediainfo $file_argument --output=JSON");
+			$media_info = json_decode($json_output);
+
+			// May need to loop on all tracks; likely look for 'Encoded_Date' or 'Tagged_Date'
+			$string_datetime = $media_info->media->track[0]->Encoded_Date ?? $media_info->media->track[0]->Tagged_Date;
+			debug("Media Info; using date: $string_datetime");
+			$timestamp = strtotime($string_datetime);
+		} catch (Exception $ex) {
+			debug("'mediainfo' command not available: " . $ex->getMessage());
+		}
+	}
+
+	if (!$timestamp) {
+		// filemtime vs. filectime
+		$filectime = filectime($file);
+		$filemtime = filemtime($file);
+
+		if ($filectime < $filemtime) {
+			debug("Using filemtime: $filectime (" . date("Y-m-d H:i:s", $filemtime));
+			$timestamp = $filectime;
+		} else {
+			debug("Using filemtime: $filemtime (" . date("Y-m-d H:i:s", $filemtime));
+			$timestamp = $filemtime;
+		}
+	}
+	
 	$data = array();
 	$data['year'] = date('Y', $timestamp);
 	$data['month'] = date('m', $timestamp);
@@ -166,7 +256,7 @@ function move_file($from, $to) {
 		output("Files are identical.");
 	}
 
-	return DEBUG ? true : rename($from, $to);
+	return $_SERVER['DEBUG'] ? true : rename($from, $to);
 }
 
 ?>
