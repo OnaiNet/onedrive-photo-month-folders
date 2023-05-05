@@ -215,10 +215,11 @@ function assert_directory_exists($path) {
 		output("Path does not exist: [$path]");
 
 		// Create folder only if it is applicable to the current month
-		if (basename($path) == date('Y-m')) {
+		// 2023-05-04 actually, let's just always create the path? Should be fine...
+		//if (basename($path) == date('Y-m')) {
 			output("Creating folder [$path]...");
 			mkdir($path, 0777, true);
-		}
+		//}
 
 		return is_dir($path);
 	}
